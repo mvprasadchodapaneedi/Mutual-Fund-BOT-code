@@ -1,144 +1,118 @@
+import math
+from datetime import datetime
 import requests
 import os
-from datetime import datetime
 
 # =========================
-# CONFIG (GitHub Secrets)
+# TELEGRAM CONFIG
 # =========================
 BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 CHAT_ID = os.getenv("TG_CHAT_ID")
 
 # =========================
-# MUTUAL FUND LIST (STATIC)
+# GLOBAL ASSUMPTIONS
 # =========================
-# Scheme Code from mfapi.in
-FUNDS = {
-    "Parag Parikh Flexi Cap": "122639",
-    "Motilal Oswal Midcap": "127042",
-    "Kotak Emerging Equity": "120841",
-    "Nippon India Small Cap": "118778",
-    "ICICI Bluechip": "120586",
-    "HDFC Balanced Advantage": "119551",
-    "UTI Nifty 50 Index": "120716"
-}
+EXPECTED_RETURN = 0.12   # 12% CAGR
+INFLATION = 0.06         # 6%
+STEP_UP_RATE = 0.10      # 10%
 
 # =========================
 # GOALS CONFIG
 # =========================
-GOALS = {
-    "Daughter Goal (16 yrs)": {
-        "sip": 19000,
-        "funds": [
-            "Parag Parikh Flexi Cap",
-            "ICICI Bluechip",
-            "Motilal Oswal Midcap",
-            "HDFC Balanced Advantage"
-        ]
+GOALS = [
+    {
+        "name": "👧 Daughter Education",
+        "current_age": 9,
+        "target_age": 25,
+        "target_amount": 1_00_00_000
     },
-    "Son Goal (23 yrs)": {
-        "sip": 8000,
-        "funds": [
-            "Motilal Oswal Midcap",
-            "Kotak Emerging Equity",
-            "Nippon India Small Cap",
-            "Parag Parikh Flexi Cap"
-        ]
+    {
+        "name": "👦 Son-1 Education",
+        "current_age": 2.5,
+        "target_age": 26,
+        "target_amount": 1_00_00_000
     },
-    "Retirement Goal": {
-        "sip": 7500,
-        "funds": [
-            "Parag Parikh Flexi Cap",
-            "UTI Nifty 50 Index",
-            "HDFC Balanced Advantage"
-        ]
+    {
+        "name": "👦 Son-2 Education",
+        "current_age": 2.5,
+        "target_age": 26,
+        "target_amount": 1_00_00_000
+    },
+    {
+        "name": "🧓 Retirement",
+        "current_age": 38,
+        "target_age": 60,
+        "target_amount": 1_00_00_000
     }
-}
+]
 
 # =========================
-# FETCH NAV DATA
+# SIP CALCULATOR
 # =========================
-def get_fund_return(scheme_code, months=12):
-    url = f"https://api.mfapi.in/mf/{scheme_code}"
-    r = requests.get(url, timeout=10).json()
+def calculate_monthly_sip(target, years, rate):
+    r = rate / 12
+    n = years * 12
+    sip = target * r / ((1 + r) ** n - 1)
+    return round(sip)
 
-    data = r.get("data", [])
-    if len(data) < months * 20:
-        return None
-
-    nav_now = float(data[0]["nav"])
-    nav_old = float(data[months * 20]["nav"])
-
-    return round(((nav_now - nav_old) / nav_old) * 100, 2)
+# =========================
+# SIP STEP-UP CHECK
+# =========================
+def stepup_suggestion(current_sip):
+    return round(current_sip * (1 + STEP_UP_RATE))
 
 # =========================
 # TELEGRAM
 # =========================
 def send_telegram(msg):
     if not BOT_TOKEN or not CHAT_ID:
+        print("Telegram config missing")
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
 
 # =========================
-# ANALYSIS ENGINE
-# =========================
-def analyze_fund(fund_name):
-    scheme = FUNDS[fund_name]
-    ret_1y = get_fund_return(scheme, 12)
-    ret_3y = get_fund_return(scheme, 36)
-
-    if ret_1y is None or ret_3y is None:
-        return "DATA NOT AVAILABLE", None, None
-
-    if ret_1y > 12 and ret_3y > 14:
-        signal = "🟢 SIP కొనసాగించండి"
-    elif ret_1y < 5:
-        signal = "⚠️ గమనించాలి"
-    else:
-        signal = "🟡 HOLD"
-
-    return signal, ret_1y, ret_3y
-
-def sip_stepup_suggestion(current_sip, target_amount, years_left, expected_return=0.12):
-    future_value = current_sip * 12 * years_left * (1 + expected_return)
-
-    if future_value >= target_amount:
-        return "✅ మీ SIP సరిపోతుంది. Continue చేయండి."
-    else:
-        stepup = round(current_sip * 1.1)
-        return f"🔼 SIP Step-Up అవసరం. ₹{current_sip} → ₹{stepup}"
-
-
-# =========================
 # MAIN BOT LOGIC
 # =========================
 def run_bot():
-    today = datetime.now().strftime("%d-%m-%Y")
+    final_message = f"📊 *Mutual Fund AI Planner*\n📅 {datetime.now().strftime('%d-%m-%Y')}\n\n"
 
-    for goal, info in GOALS.items():
-        message = f"""
-🎯 లక్ష్యం: {goal}
-📅 తేదీ: {today}
-💰 Monthly SIP: ₹{info['sip']}
+    for goal in GOALS:
+        years_left = goal["target_age"] - goal["current_age"]
+        sip = calculate_monthly_sip(
+            goal["target_amount"],
+            years_left,
+            EXPECTED_RETURN
+        )
 
+        sip_stepup = stepup_suggestion(sip)
+
+        final_message += f"""
+{goal['name']}
+🎯 Target: ₹{goal['target_amount']:,}
+⏳ Years Left: {years_left}
+
+💰 Required SIP: ₹{sip:,}/month
+🔼 Next Year SIP (10% step-up): ₹{sip_stepup:,}
+
+✅ Suggested Funds:
+• Equity Mid & Small Cap (70%)
+• Flexi Cap / Index (20%)
+• Debt / Hybrid (10%)
+
+━━━━━━━━━━━━━━━
 """
 
-        for fund in info["funds"]:
-            signal, r1, r3 = analyze_fund(fund)
+    final_message += """
+📌 *Important Notes*
+• SIP yearly 10% step-up చేయాలి
+• Market fall లో extra invest చేయండి
+• Yearly once portfolio review అవసరం
 
-            if r1 is None:
-                message += f"❌ {fund}: డేటా లేదు\n"
-                continue
-
-            message += f"""
-📌 ఫండ్: {fund}
-1Y Return: {r1}%
-3Y Return: {r3}%
-సూచన: {signal}
+⚠️ ఇది financial education purpose మాత్రమే
 """
 
-        message += "\n-----------------------\n"
-        send_telegram(message)
+    send_telegram(final_message)
 
 # =========================
 # ENTRY POINT
