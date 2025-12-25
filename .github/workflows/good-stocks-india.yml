@@ -1,13 +1,12 @@
-name: Mutual Fund India AI Bot
+name: Mutual Fund AI Planner
 
 on:
   schedule:
-    # Everyday at 7:30 AM IST (02:00 UTC)
-    - cron: '0 2 * * *'
+    - cron: '0 3 * * *'   # 08:30 AM IST
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  run:
     runs-on: ubuntu-latest
 
     env:
@@ -15,18 +14,14 @@ jobs:
       TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
 
     steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: 📦 Install Dependencies
-        run: |
-          pip install requests
+      - name: Install deps
+        run: pip install requests
 
-      - name: ▶️ Run Mutual Fund AI Bot
-        run: |
-          python main.py
+      - name: Run Bot
+        run: python main.py
