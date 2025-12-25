@@ -99,6 +99,16 @@ def analyze_fund(fund_name):
 
     return signal, ret_1y, ret_3y
 
+def sip_stepup_suggestion(current_sip, target_amount, years_left, expected_return=0.12):
+    future_value = current_sip * 12 * years_left * (1 + expected_return)
+
+    if future_value >= target_amount:
+        return "✅ మీ SIP సరిపోతుంది. Continue చేయండి."
+    else:
+        stepup = round(current_sip * 1.1)
+        return f"🔼 SIP Step-Up అవసరం. ₹{current_sip} → ₹{stepup}"
+
+
 # =========================
 # MAIN BOT LOGIC
 # =========================
